@@ -1,0 +1,11 @@
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/service/UserService.java
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/UserManagementApplication.java
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/repository/UserAuditRepository.java
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/exception/GlobalExceptionHandler.java
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/controller/UserController.java
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/model/User.java
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/controller/HealthController.java
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/controller/AuditController.java
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/model/UserAudit.java
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/config/CorsConfig.java
+/home/z33/Documents/TermiStack/backend/src/main/java/com/example/usermanagement/repository/UserRepository.java

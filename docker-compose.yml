@@ -1,0 +1,54 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: user-management-postgres
+    environment:
+      - POSTGRES_DB=termistack
+      - POSTGRES_USER=termistack
+      - POSTGRES_PASSWORD=termistack
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  backend:
+    build: ./backend
+    container_name: user-management-api
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_DATA_REDIS_PORT=6379
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/termistack
+      - SPRING_DATASOURCE_USERNAME=termistack
+      - SPRING_DATASOURCE_PASSWORD=termistack
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - app-network
+
+  frontend:
+    build: ./frontend
+    container_name: user-management-ui
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
