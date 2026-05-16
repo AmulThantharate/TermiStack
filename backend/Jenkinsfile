@@ -8,6 +8,12 @@ pipeline {
 
     environment {
         SONAR_HOME = tool('sonar')
+
+        IMAGE_NAME          = 'claw4321/termistack-backend'
+        DOCKER_REGISTRY_URL = 'https://index.docker.io/v1/'
+        TRIVY_SEVERITY      = 'HIGH,CRITICAL'
+        TRIVY_EXIT_CODE     = '0'
+        SYFT_FORMAT         = "spdx-json"
     }
 
     parameters {
@@ -89,6 +95,38 @@ pipeline {
               waitForQualityGate abortPipeline: true
             }
           }
+      }
+
+      stage("Trivy File System Scan"){
+        steps{
+            sh "mkdir -p reports/backend && trivy fs ./backend --format table -o reports/backend/trivy-fs-report.html"
+        }
+        post{
+          always {
+            publishHtml([
+              allowMissing: false,
+              alwaysLinkToLastBuild: true,
+              keepAll: true,
+              reportDir: 'reports/backend',
+              reportFiles: 'trivy-fs-report.html',
+              reportName: 'Trivy File System Scan'
+            ])
+          }
+        }
+      }
+
+      stage("Docker Build"){
+        steps{
+          dir("./backend"){
+            sh """
+              docker build \
+              --cache-from $IMAGE_NAME:$IMAGE_TAG \
+              -t $IMAGE_NAME:$IMAGE_TAG \
+              -t $IMAGE_NAME:latest \
+              -f Dockerfile .
+            """
+          }
+        }
       }
     }
 
