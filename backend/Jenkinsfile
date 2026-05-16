@@ -101,7 +101,7 @@ pipeline {
         steps {
           dir("./backend"){
             sh """
-              mvn clean deploy -Dmaven.deploy.skip=true
+              mvn clean deploy
             """
           }
         }
