@@ -45,46 +45,63 @@ pipeline {
         }
 
         stage('Build') {
-          dir ('./backend') {
             steps {
-                sh 'mvn clean install'
+                dir('./backend') {
+                    sh 'mvn clean install'
+                }
             }
-          }
         }
 
         stage('Compile') {
-          dir ('./backend') {
             steps {
-                sh 'mvn compile'
+                dir('./backend') {
+                    sh 'mvn compile'
+                }
             }
-          }
         }
 
         stage('Test') {
-            dir ('./backend') {
             steps {
-                echo 'Running backend unit tests...'
-                sh 'mvn test'
+                dir('./backend') {
+                    echo 'Running backend unit tests...'
+                    sh 'mvn test'
+                }
             }
 
             post {
                 success {
-                    sh '''
-                        mkdir -p coverage
-                        mvn test-compile surefire-report:report --batch-mode
-                    '''
+                    dir('./backend') {
 
-                    publishHTML(target: [
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: true,
-                        keepAll: true,
-                        reportDir: 'target/site',
-                        reportFiles: 'surefire-report.html',
-                        reportName: 'Backend Test Report'
-                    ])
+                        sh '''
+                            mkdir -p coverage
+                            mvn test-compile surefire-report:report --batch-mode
+                        '''
+
+                        publishHTML(target: [
+                            allowMissing: false,
+                            alwaysLinkToLastBuild: true,
+                            keepAll: true,
+                            reportDir: 'target/site',
+                            reportFiles: 'surefire-report.html',
+                            reportName: 'Backend Test Report'
+                        ])
+                    }
                 }
             }
         }
     }
-  }
+
+    post {
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+
+        failure {
+            echo 'Pipeline failed!'
+        }
+
+        always {
+            cleanWs()
+        }
+    }
 }
