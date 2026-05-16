@@ -132,8 +132,8 @@ pipeline {
                 sh """
                     mvn clean deploy \
                     -s settings.xml \
-                    -Pnexus-${NEXUS_REPO} \
-                    -Dnexus.url=${NEXUS_URL} \
+                    -Pnexus-${env.NEXUS_REPO} \
+                    -Dnexus.url=${env.NEXUS_URL} \
                     -DskipTests \
                     --batch-mode
                 """
