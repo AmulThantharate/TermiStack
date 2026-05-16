@@ -67,41 +67,7 @@ pipeline {
                     sh 'mvn test'
                 }
             }
-
-            post {
-                success {
-                    dir('./backend') {
-
-                        sh '''
-                            mkdir -p coverage
-                            mvn test-compile surefire-report:report --batch-mode
-                        '''
-
-                        publishHTML(target: [
-                            allowMissing: false,
-                            alwaysLinkToLastBuild: true,
-                            keepAll: true,
-                            reportDir: 'target/site',
-                            reportFiles: 'surefire-report.html',
-                            reportName: 'Backend Test Report'
-                        ])
-                    }
-                }
-            }
         }
     }
 
-    post {
-        success {
-            echo 'Pipeline executed successfully!'
-        }
-
-        failure {
-            echo 'Pipeline failed!'
-        }
-
-        always {
-            cleanWs()
-        }
-    }
 }
