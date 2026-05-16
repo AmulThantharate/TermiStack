@@ -1,0 +1,12 @@
+com/example/usermanagement/repository/UserAuditRepository.class
+com/example/usermanagement/model/User.class
+com/example/usermanagement/exception/GlobalExceptionHandler.class
+com/example/usermanagement/controller/AuditController.class
+com/example/usermanagement/service/UserService.class
+com/example/usermanagement/config/CorsConfig$1.class
+com/example/usermanagement/repository/UserRepository.class
+com/example/usermanagement/controller/HealthController.class
+com/example/usermanagement/model/UserAudit.class
+com/example/usermanagement/UserManagementApplication.class
+com/example/usermanagement/config/CorsConfig.class
+com/example/usermanagement/controller/UserController.class

@@ -97,6 +97,17 @@ pipeline {
           }
       }
 
+      stage("Deploy To Nexus Repository"){
+        steps {
+          dir("./backend"){
+            sh """
+              mvn clean deploy -Dmaven.deploy.skip=true
+            """
+          }
+        }
+      }
+
+
       stage("Trivy File System Scan"){
         steps{
             sh "mkdir -p reports/backend && trivy fs ./backend --format table -o reports/backend/trivy-fs-report.html"
