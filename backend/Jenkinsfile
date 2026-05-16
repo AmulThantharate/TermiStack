@@ -103,7 +103,7 @@ pipeline {
         }
         post{
           always {
-            publishHtml([
+            publishHTML([
               allowMissing: false,
               alwaysLinkToLastBuild: true,
               keepAll: true,
