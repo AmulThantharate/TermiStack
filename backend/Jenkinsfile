@@ -1,0 +1,85 @@
+pipeline {
+    agent any
+
+    tools {
+        maven 'mvn3'
+        jdk 'jdk21'
+    }
+
+    environment {
+        SONAR_HOME = tool('sonar')
+    }
+
+    parameters {
+        string(
+            name: 'IMAGE_TAG',
+            defaultValue: '',
+            description: 'Optional Docker image tag'
+        )
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/AmulThantharate/TermiStack.git'
+            }
+        }
+
+        stage('Image Tag') {
+            steps {
+                script {
+                    if (params.IMAGE_TAG?.trim()) {
+                        env.IMAGE_TAG = params.IMAGE_TAG
+                    } else {
+                        env.IMAGE_TAG = sh(
+                            script: 'git log -1 --format="%h"',
+                            returnStdout: true
+                        ).trim()
+                    }
+
+                    echo "USING IMAGE_TAG = ${env.IMAGE_TAG}"
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean install'
+            }
+        }
+
+        stage('Compile') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo 'Running backend unit tests...'
+                sh 'mvn test'
+            }
+
+            post {
+                success {
+                    sh '''
+                        mkdir -p coverage
+                        mvn test-compile surefire-report:report --batch-mode
+                    '''
+
+                    publishHTML(target: [
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'target/site',
+                        reportFiles: 'surefire-report.html',
+                        reportName: 'Backend Test Report'
+                    ])
+                }
+            }
+        }
+    }
+
+}
