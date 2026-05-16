@@ -76,7 +76,8 @@ pipeline {
               ${SONAR_HOME}/bin/sonar-scanner \
               -Dsonar.projectName='termistack-backend' \
               -Dsonar.projectKey='termistack-backend' \
-              -Dsonar.sources=./backend
+              -Dsonar.sources=./backend \
+              -Dsonar.java.binaries=./backend/target/classes
             """
           }
         }
