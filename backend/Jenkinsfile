@@ -45,18 +45,23 @@ pipeline {
         }
 
         stage('Build') {
+          dir ('./backend') {
             steps {
                 sh 'mvn clean install'
             }
+          }
         }
 
         stage('Compile') {
+          dir ('./backend') {
             steps {
                 sh 'mvn compile'
             }
+          }
         }
 
         stage('Test') {
+            dir ('./backend') {
             steps {
                 echo 'Running backend unit tests...'
                 sh 'mvn test'
@@ -81,5 +86,5 @@ pipeline {
             }
         }
     }
-
+  }
 }
