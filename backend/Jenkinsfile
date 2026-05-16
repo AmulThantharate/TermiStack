@@ -68,6 +68,27 @@ pipeline {
                 }
             }
         }
+
+        stage("SonarQube Analysis"){
+          steps{
+            withSonarQubeEnv('sonar') {
+            sh """
+              ${SONAR_HOME}/bin/sonar-scanner \
+              -Dsonar.projectName='termistack-backend' \
+              -Dsonar.projectKey='termistack-backend' \
+              -Dsonar.sources=./backend
+            """
+          }
+        }
+      }
+
+      stage("Quality Gate"){
+          steps {
+            timeout(time: 5, unit: "MINUTES") {
+              waitForQualityGate abortPipeline: true
+            }
+          }
+      }
     }
 
 }
