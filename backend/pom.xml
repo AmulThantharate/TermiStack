@@ -123,12 +123,12 @@
 
                 <repository>
                     <id>nexus</id>
-                    <url>http://192.168.122.218:8081/repository/maven-releases/</url>
+                    <url>${nexus.url}/repository/maven-releases/</url>
                 </repository>
 
                 <snapshotRepository>
                     <id>nexus</id>
-                    <url>http://192.168.122.218:8081/repository/maven-snapshots/</url>
+                    <url>${nexus.url}/repository/maven-snapshots/</url>
                 </snapshotRepository>
 
             </distributionManagement>
@@ -176,11 +176,13 @@
                 <version>3.2.5</version>
             </plugin>
 
-            <!-- Maven Deploy Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-deploy-plugin</artifactId>
                 <version>3.1.1</version>
+                <configuration>
+                    <skip>false</skip>
+                </configuration>
             </plugin>
 
             <!-- Maven Site Plugin -->

@@ -14,6 +14,8 @@ pipeline {
         TRIVY_SEVERITY      = 'HIGH,CRITICAL'
         TRIVY_EXIT_CODE     = '0'
         SYFT_FORMAT         = "spdx-json"
+        NEXUS_URL           = "http://192.168.122.218:8081"
+        NEXUS_REPO          = "" // Determined dynamically
     }
 
     parameters {
@@ -46,6 +48,13 @@ pipeline {
                     }
 
                     echo "USING IMAGE_TAG = ${env.IMAGE_TAG}"
+
+                    // Determine if it's a Snapshot or Release
+                    dir('./backend') {
+                        def mvnVersion = sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim()
+                        env.NEXUS_REPO = mvnVersion.endsWith('SNAPSHOT') ? 'snapshot' : 'release'
+                    }
+                    echo "DETECTED REPO TYPE = ${env.NEXUS_REPO}"
                 }
             }
         }
@@ -97,12 +106,40 @@ pipeline {
           }
       }
 
-      stage("Deploy To Nexus Repository"){
+      stage('Upload to Nexus') {
         steps {
-          dir("./backend"){
-            sh """
-              mvn clean deploy
-            """
+          dir('backend') {
+            withCredentials([
+              usernamePassword(
+                credentialsId: 'nexus-creds',
+                usernameVariable: 'NEXUS_USER',
+                passwordVariable: 'NEXUS_PASS'
+              )
+            ]) {
+              script {
+                def settingsXml = """
+                <settings>
+                    <servers>
+                        <server>
+                            <id>nexus</id>
+                            <username>${NEXUS_USER}</username>
+                            <password>${NEXUS_PASS}</password>
+                        </server>
+                    </servers>
+                </settings>
+                """
+                writeFile file: 'settings.xml', text: settingsXml
+                sh """
+                    mvn clean deploy \
+                    -s settings.xml \
+                    -Pnexus-${NEXUS_REPO} \
+                    -Dnexus.url=${NEXUS_URL} \
+                    -DskipTests \
+                    --batch-mode
+                """
+                archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
+              }
+            }
           }
         }
       }
@@ -129,12 +166,47 @@ pipeline {
       stage("Docker Build"){
         steps{
           dir("./backend"){
+            sh "docker build -t $IMAGE_NAME:$IMAGE_TAG -t $IMAGE_NAME:latest ."
+          }
+        }
+      }
+
+      stage("Trivy Image Scan"){
+        steps{
+          sh "trivy image --format table -o reports/backend/trivy-image-report.html $IMAGE_NAME:$IMAGE_TAG"
+        }
+        post{
+          always {
+            publishHTML([
+              allowMissing: false,
+              alwaysLinkToLastBuild: true,
+              keepAll: true,
+              reportDir: 'reports/backend',
+              reportFiles: 'trivy-image-report.html',
+              reportName: 'Trivy Image Scan'
+            ])
+          }
+        }
+      }
+
+      stage("Docker Push"){
+        steps{
+          withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
             sh """
-              docker build \
-              --cache-from $IMAGE_NAME:$IMAGE_TAG \
-              -t $IMAGE_NAME:$IMAGE_TAG \
-              -t $IMAGE_NAME:latest \
-              -f Dockerfile .
+              docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}
+              docker push $IMAGE_NAME:$IMAGE_TAG
+              docker push $IMAGE_NAME:latest
+            """
+          }
+        }
+      }
+
+      stage("Deploy to Kubernetes"){
+        steps{
+          dir("k8s"){
+            sh """
+              sed -i 's|image: .*|image: $IMAGE_NAME:$IMAGE_TAG|g' backend.yaml
+              kubectl apply -f backend.yaml
             """
           }
         }

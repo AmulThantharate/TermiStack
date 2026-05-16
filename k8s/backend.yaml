@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: rest-api-java-backend:latest
+          image: claw4321/termistack-backend:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
