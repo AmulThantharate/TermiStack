@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: claw4321/termistack-backend:latest
+          image: claw4321/termistack-backend:v1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

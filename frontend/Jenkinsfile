@@ -98,7 +98,7 @@ pipeline {
 
     stage("Trivy File System Scan") {
       steps {
-        sh "mkdir -p reports/frontend && trivy fs ./frontend --format table -o reports/frontend/trivy-fs-report.html ."
+        sh "mkdir -p reports/frontend && trivy fs ./frontend --format table -o reports/frontend/trivy-fs-report.html"
       }
       post {
         always {

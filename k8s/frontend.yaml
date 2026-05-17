@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: user-management-ui:latest
+          image: claw4321/termistack-frontend:v1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
