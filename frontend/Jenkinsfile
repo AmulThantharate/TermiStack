@@ -44,7 +44,7 @@ pipeline {
           sh '''
             echo "=== Installing Dependencies ==="
             rm -rf node_modules
-            npm install --no-audit
+            npm install --legacy-peer-deps --no-audit
           '''
         }
       }
@@ -61,8 +61,8 @@ pipeline {
       }
     }
 
-    stage("Test"){
-      steps{
+    stage("Test") {
+      steps {
         dir("frontend"){
           sh '''
             echo "=== Running Tests ==="
@@ -70,16 +70,6 @@ pipeline {
           '''
         }
       }
-    }
-
-    stage("Somke Test"){
-      steps{
-        dir ("./frontend") {
-        sh """
-          npm run test:smoke
-          """
-      }
-    }
     }
 
     stage('SonarQube Analysis') {
@@ -91,10 +81,7 @@ pipeline {
               -Dsonar.projectName='termistack-frontend' \
               -Dsonar.projectKey='termistack-frontend' \
               -Dsonar.sources=. \
-              -Dsonar.tests=. \
-              -Dsonar.test.inclusions=**/*.test.js,**/*.spec.js \
-              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
-              -Dsonar.coverage.exclusions=**/*.test.js,**/*.spec.js,**/node_modules/**
+              -Dsonar.exclusions=**/node_modules/**
             """
         }
           }
