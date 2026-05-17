@@ -129,10 +129,16 @@ pipeline {
                 </settings>
                 """
                 writeFile file: 'settings.xml', text: settingsXml
+                
+                // Determine repository profile suffix dynamically in the current stage scope as a robust fallback
+                def profileSuffix = (env.NEXUS_REPO && env.NEXUS_REPO != 'null' && env.NEXUS_REPO != "") ? env.NEXUS_REPO : (sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim().endsWith('SNAPSHOT') ? 'snapshot' : 'release')
+                
+                echo "Activating Maven profile: nexus-${profileSuffix}"
+                
                 sh """
                     mvn clean deploy \
                     -s settings.xml \
-                    -Pnexus-${env.NEXUS_REPO} \
+                    -Pnexus-${profileSuffix} \
                     -Dnexus.url=${env.NEXUS_URL} \
                     -DskipTests \
                     --batch-mode
