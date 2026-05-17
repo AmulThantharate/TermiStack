@@ -15,7 +15,7 @@ pipeline {
         TRIVY_EXIT_CODE     = '0'
         SYFT_FORMAT         = "spdx-json"
         NEXUS_URL           = "http://192.168.122.218:8081"
-        NEXUS_REPO          = "" // Determined dynamically
+        NEXUS_REPO          = ""
     }
 
     parameters {
@@ -129,12 +129,12 @@ pipeline {
                 </settings>
                 """
                 writeFile file: 'settings.xml', text: settingsXml
-                
+
                 // Determine repository profile suffix dynamically in the current stage scope as a robust fallback
                 def profileSuffix = (env.NEXUS_REPO && env.NEXUS_REPO != 'null' && env.NEXUS_REPO != "") ? env.NEXUS_REPO : (sh(script: "mvn help:evaluate -Dexpression=project.version -q -DforceStdout", returnStdout: true).trim().endsWith('SNAPSHOT') ? 'snapshot' : 'release')
-                
+
                 echo "Activating Maven profile: nexus-${profileSuffix}"
-                
+
                 sh """
                     mvn clean deploy \
                     -s settings.xml \
@@ -207,16 +207,33 @@ pipeline {
         }
       }
 
-      stage("Deploy to Kubernetes"){
-        steps{
-          dir("k8s"){
+      stage('Security Scans') {
+      parallel {
+
+        stage('Trivy Image Scan') {
+          steps {
             sh """
-              sed -i 's|image: .*|image: $IMAGE_NAME:$IMAGE_TAG|g' backend.yaml
-              kubectl apply -f backend.yaml
+              trivy image \
+                --severity ${TRIVY_SEVERITY} \
+                --exit-code ${TRIVY_EXIT_CODE} \
+                ${IMAGE_NAME}:${IMAGE_TAG}
             """
+          }
+        }
+
+        stage('Syft SBOM') {
+          steps {
+            sh """
+              syft ${IMAGE_NAME}:${IMAGE_TAG} \
+              -o ${SYFT_FORMAT} > syft-frontend-sbom.json
+            """
+            archiveArtifacts artifacts: 'syft-frontend-sbom.json', allowEmptyArchive: true
           }
         }
       }
     }
 
-}
+    }
+
+    }
+
