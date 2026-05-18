@@ -64,5 +64,4 @@ jobs:
 
       - name: Scan File System
         run: |
-          cd backend
           trivy fs --format table --severity HIGH,CRITICAL . --output trivy-report.txt
