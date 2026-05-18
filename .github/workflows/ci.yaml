@@ -1,67 +1,176 @@
-name: TermiStack CI/CD
+name: Backend DevSecOps Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
-  pull_request:
-    branches:
-      - main
-
-  workflow_dispatch:
+env:
+  IMAGE_NAME: claw4321/termistack-backend
 
 jobs:
-  backend:
-    name: Backend Pipeline (Java)
+  # -------------------------------
+  # INIT
+  # -------------------------------
+  init:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Tag
+        id: meta
+        run: |
+          TAG="v${GITHUB_RUN_NUMBER}-$(echo $GITHUB_SHA | cut -c1-7)"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+  # -------------------------------
+  # BUILD & TEST
+  # -------------------------------
+  build-test:
+    runs-on: ubuntu-latest
+    needs: init
 
     defaults:
       run:
         working-directory: backend
 
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
-          distribution: zulu
+          distribution: temurin
           java-version: 21
+          cache: maven
 
-      - name: Verify Java
+      - name: Verify Java & Maven
         run: |
           java -version
-          echo "JAVA_HOME is: $JAVA_HOME"
           mvn -version
 
-      - name: Generate Image Tag
-        run: |
-          echo "IMAGE_TAG=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-
-      - name: Build Backend
+      - name: Build Application
         run: mvn clean install
 
-      - name: Run Backend Tests
+      - name: Run Unit Tests
         run: mvn test
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: backend/target/*.jar
+
+  build-image:
+    runs-on: ubuntu-latest
+    needs: [init, build-test]
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASS }}
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -t $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp \
+            -t $IMAGE_NAME:latest .
+
+      - name: Push Temp Image
+        run: |
+          docker push $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp
+
+  trivy-fs:
+    runs-on: ubuntu-latest
+    needs: init
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Install Trivy
         run: |
-          sudo apt-get update
-          sudo apt-get install wget apt-transport-https gnupg lsb-release -y
+          curl -sfL \
+          https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
+          sh -s -- -b /usr/local/bin
 
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
-          gpg --dearmor | \
-          sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
-
-          echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] \
-          https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | \
-          sudo tee /etc/apt/sources.list.d/trivy.list
-
-          sudo apt-get update
-          sudo apt-get install trivy -y
-
-      - name: Scan File System
+      - name: Run Filesystem Scan
         run: |
-          trivy fs --format table --severity HIGH,CRITICAL . --output trivy-report.txt
+          trivy fs \
+            --exit-code 0 \
+            --severity HIGH,CRITICAL .
+
+  trivy-image:
+    runs-on: ubuntu-latest
+    needs: [build-image, init]
+
+    steps:
+      - name: Install Trivy
+        run: |
+          curl -sfL \
+          https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
+          sh -s -- -b /usr/local/bin
+
+      - name: Scan Docker Image
+        run: |
+          trivy image \
+            --exit-code 0 \
+            --severity HIGH,CRITICAL \
+            $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp
+
+  syft:
+    runs-on: ubuntu-latest
+    needs: [build-image, init]
+
+    steps:
+      - name: Install Syft
+        run: |
+          curl -sSfL \
+          https://raw.githubusercontent.com/anchore/syft/main/install.sh | \
+          sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOM
+        run: |
+          syft \
+            $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp \
+            -o spdx-json > sbom.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-sbom
+          path: sbom.json
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    needs: build-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: "termistack-backend"
+          path: "./backend"
+          format: "HTML"
+          out: "reports"
+
+      - name: Upload Dependency Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: reports
