@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
 env:
   IMAGE_NAME: claw4321/termistack-backend
 
