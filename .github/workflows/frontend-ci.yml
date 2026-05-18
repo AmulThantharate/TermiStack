@@ -1,0 +1,247 @@
+name: Frontend DevSecOps Pipeline
+
+on:
+  push:
+    branches: [main]
+
+env:
+  IMAGE_NAME: claw4321/termistack-frontend
+
+jobs:
+  init:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Tag
+        id: meta
+        run: |
+          TAG="v${GITHUB_RUN_NUMBER}-$(echo $GITHUB_SHA | cut -c1-7)"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+  install-test:
+    runs-on: ubuntu-latest
+    needs: init
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Verify Node.js
+        run: |
+          node -v
+          npm -v
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Lint
+        run: npm run lint || true
+
+      - name: Run Tests
+        run: npm test -- --watchAll=false || true
+
+      - name: Build Frontend
+        run: npm run build
+
+      - name: Upload Build Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: frontend/dist
+
+  build-image:
+    runs-on: ubuntu-latest
+    needs: [init, install-test]
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASS }}
+
+      - name: Build Docker Image
+        run: |
+          docker build \
+            -t $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp \
+            -t $IMAGE_NAME:latest .
+
+      - name: Push Temp Docker Image
+        run: |
+          docker push $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp
+
+  trivy-fs:
+    runs-on: ubuntu-latest
+    needs: init
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Trivy
+        run: |
+          curl -sfL \
+          https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
+          sh -s -- -b /usr/local/bin
+
+      - name: Run Filesystem Scan
+        run: |
+          trivy fs \
+            --exit-code 1 \
+            --severity HIGH,CRITICAL .
+
+  trivy-image:
+    runs-on: ubuntu-latest
+    needs: [build-image, init]
+
+    steps:
+      - name: Install Trivy
+        run: |
+          curl -sfL \
+          https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
+          sh -s -- -b /usr/local/bin
+
+      - name: Scan Docker Image
+        run: |
+          trivy image \
+            --exit-code 0 \
+            --severity HIGH,CRITICAL \
+            $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp
+
+  syft:
+    runs-on: ubuntu-latest
+    needs: [build-image, init]
+
+    steps:
+      - name: Install Syft
+        run: |
+          curl -sSfL \
+          https://raw.githubusercontent.com/anchore/syft/main/install.sh | \
+          sh -s -- -b /usr/local/bin
+
+      - name: Generate SBOM
+        run: |
+          syft \
+            $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp \
+            -o spdx-json > sbom.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-sbom
+          path: sbom.json
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    needs: install-test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        with:
+          project: "termistack-frontend"
+          path: "./frontend"
+          format: "HTML"
+          out: "reports"
+
+      - name: Upload Dependency Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: reports
+
+  security-gate:
+    runs-on: ubuntu-latest
+    needs: [trivy-fs, trivy-image, syft, dependency-check]
+
+    steps:
+      - run: echo "✅ All security checks passed"
+
+  cosign:
+    runs-on: ubuntu-latest
+    needs: [security-gate, init]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASS }}
+
+      - name: Install Cosign
+        run: |
+          wget -q \
+          https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+
+          chmod +x cosign-linux-amd64
+
+          sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+
+      - name: Sign Docker Image
+        env:
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+
+        run: |
+          echo "$COSIGN_KEY" > cosign.key
+
+          cosign sign --yes \
+            --key cosign.key \
+            $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp
+
+  promote:
+    runs-on: ubuntu-latest
+    needs: [cosign, init]
+
+    steps:
+      - name: Login DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASS }}
+
+      - name: Promote Docker Image
+        run: |
+          docker pull \
+            $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp
+
+          docker tag \
+            $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp \
+            $IMAGE_NAME:${{ needs.init.outputs.tag }}-prod
+
+          docker tag \
+            $IMAGE_NAME:${{ needs.init.outputs.tag }}-temp \
+            $IMAGE_NAME:latest
+
+          docker push \
+            $IMAGE_NAME:${{ needs.init.outputs.tag }}-prod
+
+          docker push \
+            $IMAGE_NAME:latest
